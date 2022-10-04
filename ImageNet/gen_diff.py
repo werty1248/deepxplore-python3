@@ -6,26 +6,34 @@ from __future__ import print_function
 
 import argparse
 
-from keras.applications.resnet50 import ResNet50
+#Original : from keras.applications.resnet50 import ResNet50
+#ModuleNotFoundError: No module named 'keras.applications.resnet50'
+from tensorflow.keras.applications.resnet50 import ResNet50
 from keras.applications.vgg16 import VGG16
 from keras.applications.vgg19 import VGG19
 from keras.layers import Input
-import scipy.misc
+#Original : import scipy.misc
+from imageio import imwrite as imsave
 
 from configs import bcolors
 from utils import *
+
+#Change : use tf v1
+import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
 
 # read the parameter
 # argument parsing
 parser = argparse.ArgumentParser(
     description='Main function for difference-inducing input generation in ImageNet dataset')
-parser.add_argument('transformation', help="realistic transformation type", choices=['light', 'occl', 'blackout'])
-parser.add_argument('weight_diff', help="weight hyperparm to control differential behavior", type=float)
-parser.add_argument('weight_nc', help="weight hyperparm to control neuron coverage", type=float)
-parser.add_argument('step', help="step size of gradient descent", type=float)
-parser.add_argument('seeds', help="number of seeds of input", type=int)
-parser.add_argument('grad_iterations', help="number of iterations of gradient descent", type=int)
-parser.add_argument('threshold', help="threshold for determining neuron activated", type=float)
+
+parser.add_argument('--transformation', help="realistic transformation type", choices=['light', 'occl', 'blackout'])
+parser.add_argument('--weight_diff', help="weight hyperparm to control differential behavior", default=1.0, type=float)
+parser.add_argument('--weight_nc', help="weight hyperparm to control neuron coverage", default=0.1, type=float)
+parser.add_argument('--step', help="step size of gradient descent", default=10, type=float)
+parser.add_argument('--seeds', help="number of seeds of input", default=2022, type=int)
+parser.add_argument('--grad_iterations', help="number of iterations of gradient descent", default=100, type=int)
+parser.add_argument('--threshold', help="threshold for determining neuron activated", default=0.0, type=float)
 parser.add_argument('-t', '--target_model', help="target model that we want it predicts differently",
                     choices=[0, 1, 2], default=0, type=int)
 parser.add_argument('-sp', '--start_point', help="occlusion upper left corner coordinate", default=(0, 0), type=tuple)
@@ -51,7 +59,9 @@ model_layer_dict1, model_layer_dict2, model_layer_dict3 = init_coverage_tables(m
 # ==============================================================================================
 # start gen inputs
 img_paths = image.list_pictures('./seeds/', ext='jpeg')
-for _ in xrange(args.seeds):
+#Original : for _ in xrange(args.seeds):
+#NameError: name 'xrange' is not defined
+for _ in range(args.seeds):
     gen_img = preprocess_image(random.choice(img_paths))
     orig_img = gen_img.copy()
     # first check if input already induces differences
@@ -81,7 +91,7 @@ for _ in xrange(args.seeds):
         gen_img_deprocessed = deprocess_image(gen_img)
 
         # save the result to disk
-        scipy.misc.imsave('./generated_inputs/' + 'already_differ_' + decode_label(pred1) + '_' + decode_label(
+        imsave('./generated_inputs/' + 'already_differ_' + decode_label(pred1) + '_' + decode_label(
             pred2) + '_' + decode_label(pred3) + '.png', gen_img_deprocessed)
         continue
 
@@ -95,15 +105,17 @@ for _ in xrange(args.seeds):
     if args.target_model == 0:
         loss1 = -args.weight_diff * K.mean(model1.get_layer('predictions').output[..., orig_label])
         loss2 = K.mean(model2.get_layer('predictions').output[..., orig_label])
-        loss3 = K.mean(model3.get_layer('fc1000').output[..., orig_label])
+        #Original : loss3 = K.mean(model3.get_layer('fc1000').output[..., orig_label])
+        #ValueError: No such layer: fc1000. Existing layers are: [...
+        loss3 = K.mean(model3.get_layer('predictions').output[..., orig_label])
     elif args.target_model == 1:
         loss1 = K.mean(model1.get_layer('predictions').output[..., orig_label])
         loss2 = -args.weight_diff * K.mean(model2.get_layer('predictions').output[..., orig_label])
-        loss3 = K.mean(model3.get_layer('fc1000').output[..., orig_label])
+        loss3 = K.mean(model3.get_layer('predictions').output[..., orig_label])
     elif args.target_model == 2:
         loss1 = K.mean(model1.get_layer('predictions').output[..., label1])
         loss2 = K.mean(model2.get_layer('predictions').output[..., orig_label])
-        loss3 = -args.weight_diff * K.mean(model3.get_layer('fc1000').output[..., orig_label])
+        loss3 = -args.weight_diff * K.mean(model3.get_layer('predictions').output[..., orig_label])
     loss1_neuron = K.mean(model1.get_layer(layer_name1).output[..., index1])
     loss2_neuron = K.mean(model2.get_layer(layer_name2).output[..., index2])
     loss3_neuron = K.mean(model3.get_layer(layer_name3).output[..., index3])
@@ -119,7 +131,9 @@ for _ in xrange(args.seeds):
     iterate = K.function([input_tensor], [loss1, loss2, loss3, loss1_neuron, loss2_neuron, loss3_neuron, grads])
 
     # we run gradient ascent for 20 steps
-    for iters in xrange(args.grad_iterations):
+    #Original : for iters in xrange(args.grad_iterations):
+    #NameError: name 'xrange' is not defined
+    for iters in range(args.grad_iterations):
         loss_value1, loss_value2, loss_value3, loss_neuron1, loss_neuron2, loss_neuron3, grads_value = iterate(
             [gen_img])
         if args.transformation == 'light':
@@ -154,10 +168,10 @@ for _ in xrange(args.seeds):
             orig_img_deprocessed = deprocess_image(orig_img)
 
             # save the result to disk
-            scipy.misc.imsave(
+            imsave(
                 './generated_inputs/' + args.transformation + '_' + decode_label(pred1) + '_' + decode_label(
                     pred2) + '_' + decode_label(pred3) + '.png', gen_img_deprocessed)
-            scipy.misc.imsave(
+            imsave(
                 './generated_inputs/' + args.transformation + '_' + decode_label(pred1) + '_' + decode_label(
                     pred2) + '_' + decode_label(pred3) + '_orig.png', orig_img_deprocessed)
             break

@@ -85,7 +85,9 @@ def neuron_to_cover(model_layer_dict):
     if not_covered:
         layer_name, index = random.choice(not_covered)
     else:
-        layer_name, index = random.choice(model_layer_dict.keys())
+        #Origianl : layer_name, index = random.choice(model_layer_dict.keys())
+        #TypeError: 'dict_keys' object is not subscriptable
+        layer_name, index = random.choice(list(model_layer_dict.keys()))
     return layer_name, index
 
 
@@ -112,7 +114,9 @@ def update_coverage(input_data, model, model_layer_dict, threshold=0):
 
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
         scaled = scale(intermediate_layer_output[0])
-        for num_neuron in xrange(scaled.shape[-1]):
+        #Original : for num_neuron in xrange(scaled.shape[-1]):
+        #NameError: name 'xrange' is not defined
+        for num_neuron in range(scaled.shape[-1]):
             if np.mean(scaled[..., num_neuron]) > threshold and not model_layer_dict[(layer_names[i], num_neuron)]:
                 model_layer_dict[(layer_names[i], num_neuron)] = True
 
